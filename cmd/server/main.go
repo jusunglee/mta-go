@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -29,7 +29,8 @@ func main() {
 		*apiKey = os.Getenv("MTA_API_KEY")
 	}
 	if *apiKey == "" {
-		log.Fatal("MTA API key required (use -api-key flag or MTA_API_KEY env var)")
+		slog.Error("MTA API key required (use -api-key flag or MTA_API_KEY env var)")
+	os.Exit(1)
 	}
 
 	config := mta.Config{
@@ -40,12 +41,13 @@ func main() {
 
 	client, err := mta.NewLocal(config)
 	if err != nil {
-		log.Fatalf("Failed to create MTA client: %v", err)
+		slog.Error("Failed to create MTA client", "error", err)
+	os.Exit(1)
 	}
 	defer client.Close()
 
 	// Allow time for feed manager to fetch initial station data
-	log.Println("Waiting for initial data...")
+	slog.Info("Waiting for initial data...")
 	time.Sleep(2 * time.Second)
 
 	r := mux.NewRouter()
@@ -65,9 +67,10 @@ func main() {
 
 	// Start HTTP server in goroutine for graceful shutdown
 	go func() {
-		log.Printf("Server starting on port %s", *port)
+		slog.Info("Server starting", "port", *port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+			slog.Error("Server failed to start", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -76,17 +79,18 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	slog.Info("Shutting down server...")
 
 	// Allow 30 seconds for graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		slog.Error("Server forced to shutdown", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server stopped")
+	slog.Info("Server stopped")
 }
 
 // loggingMiddleware logs HTTP requests with method, URI, and response time
@@ -94,7 +98,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.RequestURI, time.Since(start))
+		slog.Info("HTTP request", "method", r.Method, "uri", r.RequestURI, "duration", time.Since(start))
 	})
 }
 

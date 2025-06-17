@@ -18,6 +18,7 @@ type Client interface {
 	GetServiceAlerts() ([]models.Alert, error)
 
 	GetLastUpdate() time.Time
+	GetLastStaticUpdate() time.Time
 }
 
 // Config holds configuration for the MTA client

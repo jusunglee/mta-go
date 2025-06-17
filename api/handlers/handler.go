@@ -32,21 +32,61 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/alerts", h.handleAlerts).Methods("GET")
 }
 
-// Response wraps API responses
-// Includes optional timestamp for cache validation
-type Response struct {
-	Data    interface{} `json:"data"`
-	Updated string      `json:"updated,omitempty"`
+// Base response metadata for all API responses
+type ResponseMetadata struct {
+	Updated           string `json:"updated,omitempty"`            // Real-time data update
+	StaticDataUpdated string `json:"static_data_updated,omitempty"` // Static GTFS data update
+}
+
+// Specific response types for each endpoint
+type StationsResponse struct {
+	Data []models.StationResponse `json:"data"`
+	ResponseMetadata
+}
+
+type RoutesResponse struct {
+	Data []string `json:"data"`
+	ResponseMetadata
+}
+
+type AlertsResponse struct {
+	Data []models.Alert `json:"data"`
+	ResponseMetadata
+}
+
+type InfoResponse struct {
+	Data map[string]string `json:"data"`
+	ResponseMetadata
 }
 
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// getResponseMetadata creates metadata with update timestamps
+func (h *Handler) getResponseMetadata() ResponseMetadata {
+	meta := ResponseMetadata{}
+	
+	// Add real-time data update time
+	if lastUpdate := h.client.GetLastUpdate(); !lastUpdate.IsZero() {
+		meta.Updated = lastUpdate.Format(time.RFC3339)
+	}
+	
+	// Add static data update time if available
+	if staticUpdate := h.client.GetLastStaticUpdate(); !staticUpdate.IsZero() {
+		meta.StaticDataUpdated = staticUpdate.Format(time.RFC3339)
+	}
+	
+	return meta
+}
+
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
-	response := map[string]string{
-		"title":  "mta-go",
-		"readme": "Visit https://github.com/jusunglee/mta-go for more info",
+	response := InfoResponse{
+		Data: map[string]string{
+			"title":  "mta-go",
+			"readme": "Visit https://github.com/jusunglee/mta-go for more info",
+		},
+		ResponseMetadata: h.getResponseMetadata(),
 	}
 	h.writeJSON(w, response)
 }
@@ -116,10 +156,11 @@ func (h *Handler) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := Response{
-		Data:    routes,
-		Updated: h.client.GetLastUpdate().Format(time.RFC3339),
+	response := RoutesResponse{
+		Data:             routes,
+		ResponseMetadata: h.getResponseMetadata(),
 	}
+	
 	h.writeJSON(w, response)
 }
 
@@ -130,10 +171,11 @@ func (h *Handler) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := Response{
-		Data:    alerts,
-		Updated: h.client.GetLastUpdate().Format(time.RFC3339),
+	response := AlertsResponse{
+		Data:             alerts,
+		ResponseMetadata: h.getResponseMetadata(),
 	}
+	
 	h.writeJSON(w, response)
 }
 
@@ -150,9 +192,13 @@ func (h *Handler) writeStationsResponse(w http.ResponseWriter, stations []models
 		}
 	}
 
-	response := Response{
-		Data: data,
+	// Create response with proper typing
+	response := StationsResponse{
+		Data:             data,
+		ResponseMetadata: h.getResponseMetadata(),
 	}
+	
+	// Override with station-specific update time if more recent
 	if !lastUpdate.IsZero() {
 		response.Updated = lastUpdate.Format(time.RFC3339)
 	}

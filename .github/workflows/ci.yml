@@ -1,0 +1,272 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  format:
+    name: Code Format Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        
+    - name: Check gofmt
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files are not formatted correctly:"
+          gofmt -s -l .
+          echo "Please run 'gofmt -s -w .' to fix formatting issues."
+          exit 1
+        fi
+        
+    - name: Check go mod tidy
+      run: |
+        go mod tidy
+        if ! git diff --quiet go.mod go.sum; then
+          echo "go.mod or go.sum needs to be updated. Please run 'go mod tidy'."
+          git diff go.mod go.sum
+          exit 1
+        fi
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    needs: format
+    strategy:
+      matrix:
+        go-version: ['1.22', '1.23']
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Verify dependencies
+      run: go mod verify
+      
+    - name: Build server binary
+      run: go build -v -o mta-server ./cmd/server
+      
+    - name: Build local CLI binary
+      run: go build -v -o mta-local ./cmd/local
+      
+    - name: Check binary exists (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        test -f mta-server
+        test -f mta-local
+        
+    - name: Check binary exists (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        if (!(Test-Path "mta-server.exe")) { exit 1 }
+        if (!(Test-Path "mta-local.exe")) { exit 1 }
+      shell: pwsh
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: format
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        
+    - name: Install Protocol Buffers Compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+        
+    - name: Install protoc-gen-go
+      run: |
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+        
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run tests with coverage
+      run: go test -v -race -coverprofile=coverage.out ./...
+      
+    - name: Check test coverage
+      run: |
+        go tool cover -func=coverage.out
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+        echo "Total test coverage: ${COVERAGE}%"
+        # Uncomment below to enforce minimum coverage threshold
+        # if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+        #   echo "Test coverage below 70% threshold"
+        #   exit 1
+        # fi
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-latest
+    needs: format
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        args: --timeout=5m
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: format
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: '-fmt sarif -out results.sarif ./...'
+        
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: results.sarif
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+        
+    - name: Install Protocol Buffers Compiler
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+        
+    - name: Install protoc-gen-go
+      run: |
+        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+        
+    - name: Build binaries
+      run: |
+        go build -o mta-server ./cmd/server
+        go build -o mta-local ./cmd/local
+        
+    - name: Test server startup (without API key)
+      run: |
+        timeout 10s ./mta-server --port 8081 || test $? = 124
+        # Expected to fail without API key, but should not crash
+        
+    - name: Test local CLI help
+      run: |
+        ./mta-local --help
+        
+    - name: Test with mock API key (expect failure but graceful)
+      run: |
+        timeout 5s ./mta-local --api-key "mock-key" || test $? = 124
+        # Expected to fail with invalid key, but should handle gracefully
+
+  deploy-check:
+    name: Deployment Readiness
+    runs-on: ubuntu-latest
+    needs: [build, test, lint, security]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check for deployment files
+      run: |
+        echo "Checking deployment readiness..."
+        
+        # Check if Dockerfile exists
+        if [ -f "Dockerfile" ]; then
+          echo "✅ Dockerfile found"
+        else
+          echo "⚠️  Dockerfile not found - consider adding for containerized deployment"
+        fi
+        
+        # Check if docker-compose exists
+        if [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ]; then
+          echo "✅ Docker Compose configuration found"
+        else
+          echo "⚠️  Docker Compose configuration not found"
+        fi
+        
+        # Check for environment configuration
+        if [ -f ".env.example" ] || [ -f "config.example.yaml" ]; then
+          echo "✅ Environment configuration example found"
+        else
+          echo "⚠️  Consider adding .env.example for deployment guidance"
+        fi
+        
+        echo "Deployment readiness check completed"
+
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [format, build, test, lint, security]
+    if: always()
+    steps:
+    - name: Check overall status
+      run: |
+        if [ "${{ needs.format.result }}" = "success" ] && \
+           [ "${{ needs.build.result }}" = "success" ] && \
+           [ "${{ needs.test.result }}" = "success" ] && \
+           [ "${{ needs.lint.result }}" = "success" ] && \
+           [ "${{ needs.security.result }}" = "success" ]; then
+          echo "🎉 All CI checks passed!"
+          echo "STATUS=success" >> $GITHUB_ENV
+        else
+          echo "❌ Some CI checks failed"
+          echo "- Format: ${{ needs.format.result }}"
+          echo "- Build: ${{ needs.build.result }}"
+          echo "- Test: ${{ needs.test.result }}"
+          echo "- Lint: ${{ needs.lint.result }}"
+          echo "- Security: ${{ needs.security.result }}"
+          echo "STATUS=failure" >> $GITHUB_ENV
+        fi

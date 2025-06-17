@@ -20,8 +20,10 @@ type LocalClient struct {
 func NewLocal(config Config) (*LocalClient, error) {
 	s := store.NewStore()
 
-	// TODO: Load static station data from stations.json file
-	// Currently relies on feed manager to populate station data dynamically
+	// TODO: Support the ability to load static station data from stations.json file
+	// without relying on the feed manager to populate station data dynamically.
+	// Currently relies on feed manager to populate station data dynamically,
+	// but there's some second order side effects that need to be thought out more.
 
 	fm := feed.NewManager(config.APIKey, s, config.UpdateInterval)
 	fm.Start()
@@ -60,4 +62,8 @@ func (c *LocalClient) GetServiceAlerts() ([]models.Alert, error) {
 
 func (c *LocalClient) GetLastUpdate() time.Time {
 	return c.store.GetLastUpdate()
+}
+
+func (c *LocalClient) GetLastStaticUpdate() time.Time {
+	return c.feedManager.GetLastStaticUpdate()
 }

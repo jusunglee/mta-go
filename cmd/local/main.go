@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -24,7 +24,8 @@ func main() {
 		*apiKey = os.Getenv("MTA_API_KEY")
 	}
 	if *apiKey == "" {
-		log.Fatal("MTA API key required (use -api-key flag or MTA_API_KEY env var)")
+		slog.Error("MTA API key required (use -api-key flag or MTA_API_KEY env var)")
+		os.Exit(1)
 	}
 
 	config := mta.DefaultConfig()
@@ -32,7 +33,8 @@ func main() {
 
 	client, err := mta.NewLocal(config)
 	if err != nil {
-		log.Fatalf("Failed to create MTA client: %v", err)
+		slog.Error("Failed to create MTA client", "error", err)
+		os.Exit(1)
 	}
 	defer client.Close()
 
@@ -44,7 +46,8 @@ func main() {
 	if *route != "" {
 		stations, err := client.GetStationsByRoute(*route)
 		if err != nil {
-			log.Fatalf("Failed to get stations for route %s: %v", *route, err)
+			slog.Error("Failed to get stations for route", "route", *route, "error", err)
+			os.Exit(1)
 		}
 
 		fmt.Printf("\nStations on route %s:\n", *route)
@@ -57,7 +60,8 @@ func main() {
 	// Default location-based query mode
 	stations, err := client.GetStationsByLocation(*lat, *lon, 5)
 	if err != nil {
-		log.Fatalf("Failed to get stations: %v", err)
+		slog.Error("Failed to get stations", "error", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("\nNearest stations to (%.4f, %.4f):\n", *lat, *lon)
@@ -78,6 +82,12 @@ func main() {
 				fmt.Printf("    %s - %s\n", train.Route, train.Time.Format("3:04 PM"))
 			}
 		}
+	}
+	
+	// Show update times
+	fmt.Printf("\nLast real-time update: %s\n", client.GetLastUpdate().Format("3:04 PM"))
+	if staticUpdate := client.GetLastStaticUpdate(); !staticUpdate.IsZero() {
+		fmt.Printf("Last static data update: %s\n", staticUpdate.Format("3:04 PM"))
 	}
 }
 
