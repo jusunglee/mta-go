@@ -34,7 +34,7 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 
 // Base response metadata for all API responses
 type ResponseMetadata struct {
-	Updated           string `json:"updated,omitempty"`            // Real-time data update
+	Updated           string `json:"updated,omitempty"`             // Real-time data update
 	StaticDataUpdated string `json:"static_data_updated,omitempty"` // Static GTFS data update
 }
 
@@ -66,17 +66,17 @@ type ErrorResponse struct {
 // getResponseMetadata creates metadata with update timestamps
 func (h *Handler) getResponseMetadata() ResponseMetadata {
 	meta := ResponseMetadata{}
-	
+
 	// Add real-time data update time
 	if lastUpdate := h.client.GetLastUpdate(); !lastUpdate.IsZero() {
 		meta.Updated = lastUpdate.Format(time.RFC3339)
 	}
-	
+
 	// Add static data update time if available
 	if staticUpdate := h.client.GetLastStaticUpdate(); !staticUpdate.IsZero() {
 		meta.StaticDataUpdated = staticUpdate.Format(time.RFC3339)
 	}
-	
+
 	return meta
 }
 
@@ -160,7 +160,7 @@ func (h *Handler) handleRoutes(w http.ResponseWriter, r *http.Request) {
 		Data:             routes,
 		ResponseMetadata: h.getResponseMetadata(),
 	}
-	
+
 	h.writeJSON(w, response)
 }
 
@@ -175,7 +175,7 @@ func (h *Handler) handleAlerts(w http.ResponseWriter, r *http.Request) {
 		Data:             alerts,
 		ResponseMetadata: h.getResponseMetadata(),
 	}
-	
+
 	h.writeJSON(w, response)
 }
 
@@ -197,7 +197,7 @@ func (h *Handler) writeStationsResponse(w http.ResponseWriter, stations []models
 		Data:             data,
 		ResponseMetadata: h.getResponseMetadata(),
 	}
-	
+
 	// Override with station-specific update time if more recent
 	if !lastUpdate.IsZero() {
 		response.Updated = lastUpdate.Format(time.RFC3339)

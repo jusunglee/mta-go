@@ -118,9 +118,9 @@ func (m *Manager) updateLoop() {
 
 func (m *Manager) update() error {
 	// Load static GTFS data on first run OR if enough time has passed
-	needsStaticUpdate := !m.staticsLoaded || 
+	needsStaticUpdate := !m.staticsLoaded ||
 		(m.staticUpdateInterval > 0 && !m.lastStaticUpdate.IsZero() && time.Since(m.lastStaticUpdate) > m.staticUpdateInterval)
-	
+
 	if needsStaticUpdate {
 		if err := m.loadStaticGTFSData(); err != nil {
 			if !m.staticsLoaded {
@@ -128,7 +128,7 @@ func (m *Manager) update() error {
 				return fmt.Errorf("failed to load initial static GTFS data: %w", err)
 			}
 			// Refresh failed but we have existing data - log warning and continue
-			slog.Warn("Failed to refresh static GTFS data, continuing with existing data", 
+			slog.Warn("Failed to refresh static GTFS data, continuing with existing data",
 				"error", err, "last_update", m.lastStaticUpdate)
 		} else {
 			// Success - update tracking variables

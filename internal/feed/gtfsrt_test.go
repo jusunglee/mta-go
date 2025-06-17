@@ -37,7 +37,7 @@ func TestExtractRouteFromID(t *testing.T) {
 func TestSortAndLimitTrains(t *testing.T) {
 	now := time.Now()
 	m := &Manager{}
-	
+
 	trains := []models.Train{
 		{Route: "N", Time: now.Add(5 * time.Minute)},
 		{Route: "Q", Time: now.Add(2 * time.Minute)},
@@ -70,7 +70,7 @@ func TestSortAndLimitTrains(t *testing.T) {
 
 func TestProcessTripUpdate(t *testing.T) {
 	m := &Manager{}
-	
+
 	// Create test stations
 	stations := map[string]*models.Station{
 		"R16": {
@@ -87,7 +87,7 @@ func TestProcessTripUpdate(t *testing.T) {
 	routeID := "N20241201"
 	stopID := "R16N"
 	arrivalTime := time.Now().Add(3 * time.Minute).Unix()
-	
+
 	tripUpdate := &gtfsrt.TripUpdate{
 		Trip: &gtfsrt.TripDescriptor{
 			RouteId: &routeID,
@@ -130,11 +130,11 @@ func TestProcessAlert(t *testing.T) {
 	// Create a real store for the manager
 	s := store.NewStore()
 	m := &Manager{store: s}
-	
+
 	headerText := "Service Alert"
 	descriptionText := "Delays on N line"
 	routeID := "N20241201"
-	
+
 	alert := &gtfsrt.Alert{
 		HeaderText: &gtfsrt.TranslatedString{
 			Translation: []*gtfsrt.TranslatedString_Translation{
@@ -159,24 +159,23 @@ func TestProcessAlert(t *testing.T) {
 
 	// Process the alert
 	m.processAlert(alert)
-	
+
 	// Verify the alert was processed
 	alerts := s.GetServiceAlerts()
 	if len(alerts) != 1 {
 		t.Errorf("Expected 1 alert, got %d", len(alerts))
 	}
-	
+
 	processedAlert := alerts[0]
 	if processedAlert.Header != headerText {
 		t.Errorf("Expected header %q, got %q", headerText, processedAlert.Header)
 	}
-	
+
 	if processedAlert.Description != descriptionText {
 		t.Errorf("Expected description %q, got %q", descriptionText, processedAlert.Description)
 	}
-	
+
 	if len(processedAlert.Routes) != 1 || processedAlert.Routes[0] != "N" {
 		t.Errorf("Expected routes [N], got %v", processedAlert.Routes)
 	}
 }
-

@@ -30,7 +30,7 @@ func main() {
 	}
 	if *apiKey == "" {
 		slog.Error("MTA API key required (use -api-key flag or MTA_API_KEY env var)")
-	os.Exit(1)
+		os.Exit(1)
 	}
 
 	config := mta.Config{
@@ -42,7 +42,7 @@ func main() {
 	client, err := mta.NewLocal(config)
 	if err != nil {
 		slog.Error("Failed to create MTA client", "error", err)
-	os.Exit(1)
+		os.Exit(1)
 	}
 	defer client.Close()
 

@@ -79,7 +79,7 @@ func TestParseGTFSData(t *testing.T) {
 					t.Error("Station missing last update time")
 				}
 				// Routes should be populated by parseRoutes
-				t.Logf("Station %s (%s) has %d routes: %v", 
+				t.Logf("Station %s (%s) has %d routes: %v",
 					station.Name, station.ID, len(station.Routes), station.Routes)
 			}
 		})
@@ -149,7 +149,7 @@ func TestParseStops(t *testing.T) {
 				}
 
 				if station.Location.Lat == 0 || station.Location.Lon == 0 {
-					t.Errorf("Station %s missing valid coordinates: lat=%f, lon=%f", 
+					t.Errorf("Station %s missing valid coordinates: lat=%f, lon=%f",
 						stationID, station.Location.Lat, station.Location.Lon)
 				}
 
@@ -177,21 +177,21 @@ func TestParseStops(t *testing.T) {
 
 func TestParseRoutesFile(t *testing.T) {
 	tests := []struct {
-		name        string
-		routesFile  string
-		expectError bool
+		name           string
+		routesFile     string
+		expectError    bool
 		expectedRoutes []string // Sample routes we expect to find
 	}{
 		{
-			name:        "parse regular GTFS routes",
-			routesFile:  "testdata/gtfs_subway/routes.txt",
-			expectError: false,
+			name:           "parse regular GTFS routes",
+			routesFile:     "testdata/gtfs_subway/routes.txt",
+			expectError:    false,
 			expectedRoutes: []string{"1", "2", "3", "4", "5", "6", "7", "A", "B", "C", "D", "E", "F", "G", "J", "L", "M", "N", "Q", "R", "W", "Z"},
 		},
 		{
-			name:        "parse supplemented GTFS routes",
-			routesFile:  "testdata/gtfs_supplemented/routes.txt",
-			expectError: false,
+			name:           "parse supplemented GTFS routes",
+			routesFile:     "testdata/gtfs_supplemented/routes.txt",
+			expectError:    false,
 			expectedRoutes: []string{"1", "2", "3", "4", "5", "6", "7", "A", "B", "C", "D", "E", "F", "G", "J", "L", "M", "N", "Q", "R", "W", "Z"},
 		},
 		{
@@ -236,11 +236,11 @@ func TestParseRoutesFile(t *testing.T) {
 
 			// We should find most of the expected routes (allowing for service changes)
 			if foundCount < len(tt.expectedRoutes)/2 {
-				t.Errorf("Found only %d of %d expected routes. Routes found: %v", 
+				t.Errorf("Found only %d of %d expected routes. Routes found: %v",
 					foundCount, len(tt.expectedRoutes), routes)
 			}
 
-			t.Logf("Successfully parsed %d routes, found %d/%d expected routes", 
+			t.Logf("Successfully parsed %d routes, found %d/%d expected routes",
 				len(routes), foundCount, len(tt.expectedRoutes))
 		})
 	}
@@ -334,12 +334,12 @@ func TestParseStopTimesFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &Manager{}
-			
+
 			// Set a timeout for this test since stop_times.txt can be very large
 			start := time.Now()
-			
+
 			tripStops, err := m.parseStopTimesFile(tt.stopTimesFile)
-			
+
 			elapsed := time.Since(start)
 			t.Logf("Parsing took %v", elapsed)
 
@@ -438,13 +438,13 @@ func TestParseRoutes(t *testing.T) {
 			count := 0
 			for stationID, station := range stations {
 				if len(station.Routes) > 0 && count < 5 {
-					t.Logf("Station %s (%s) serves routes: %v", 
+					t.Logf("Station %s (%s) serves routes: %v",
 						station.Name, stationID, station.Routes)
 					count++
 				}
 			}
 
-			t.Logf("Successfully associated routes with %d/%d stations (total %d route assignments)", 
+			t.Logf("Successfully associated routes with %d/%d stations (total %d route assignments)",
 				stationsWithRoutes, len(stations), totalRoutes)
 		})
 	}
@@ -454,7 +454,7 @@ func TestParseRoutes(t *testing.T) {
 func BenchmarkParseStopTimes(b *testing.B) {
 	m := &Manager{}
 	stopTimesFile := "testdata/gtfs_subway/stop_times.txt"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := m.parseStopTimesFile(stopTimesFile)
@@ -466,12 +466,12 @@ func BenchmarkParseStopTimes(b *testing.B) {
 
 func BenchmarkParseGTFSData(b *testing.B) {
 	gtfsDir := "testdata/gtfs_subway"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		s := store.NewStore()
 		m := &Manager{store: s}
-		
+
 		err := m.parseGTFSData(gtfsDir)
 		if err != nil {
 			b.Fatalf("Error in benchmark: %v", err)
@@ -482,25 +482,25 @@ func BenchmarkParseGTFSData(b *testing.B) {
 func TestStaticDataRefresh(t *testing.T) {
 	s := store.NewStore()
 	m := NewManager("test-key", s, time.Minute)
-	
+
 	// Test that refresh can be disabled
 	m.SetStaticUpdateInterval(0)
 	if m.staticUpdateInterval != 0 {
 		t.Error("SetStaticUpdateInterval(0) should disable refresh")
 	}
-	
+
 	// Test that refresh interval can be configured
 	m.SetStaticUpdateInterval(2 * time.Hour)
 	if m.staticUpdateInterval != 2*time.Hour {
 		t.Errorf("Expected 2 hours, got %v", m.staticUpdateInterval)
 	}
-	
+
 	// Test default interval
 	m2 := NewManager("test-key", s, time.Minute)
 	if m2.staticUpdateInterval != 6*time.Hour {
 		t.Errorf("Expected default 6 hours, got %v", m2.staticUpdateInterval)
 	}
-	
+
 	// Test GetLastStaticUpdate before any updates
 	if !m.GetLastStaticUpdate().IsZero() {
 		t.Error("GetLastStaticUpdate should return zero time before any updates")

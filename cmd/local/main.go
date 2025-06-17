@@ -83,7 +83,7 @@ func main() {
 			}
 		}
 	}
-	
+
 	// Show update times
 	fmt.Printf("\nLast real-time update: %s\n", client.GetLastUpdate().Format("3:04 PM"))
 	if staticUpdate := client.GetLastStaticUpdate(); !staticUpdate.IsZero() {
