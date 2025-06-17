@@ -5,6 +5,8 @@ mta-local
 *.dll
 *.so
 *.dylib
+local
+server
 
 # Test binary, built with `go test -c`
 *.test
