@@ -12,7 +12,8 @@ import (
 	"github.com/jusunglee/mta-go/internal/store"
 )
 
-// FeedURLs for NYC Subway
+// FeedURLs for NYC Subway GTFS-RT feeds
+// Each URL corresponds to different subway lines as per MTA's feed grouping
 var FeedURLs = []string{
 	"https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs",      // 1234567S
 	"https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-l",    // L
@@ -24,6 +25,7 @@ var FeedURLs = []string{
 }
 
 // Manager handles feed fetching and processing
+// Runs background goroutine to periodically fetch and parse MTA GTFS-RT data
 type Manager struct {
 	apiKey         string
 	store          *store.Store
@@ -33,7 +35,6 @@ type Manager struct {
 	wg             sync.WaitGroup
 }
 
-// NewManager creates a new feed manager
 func NewManager(apiKey string, store *store.Store, updateInterval time.Duration) *Manager {
 	return &Manager{
 		apiKey:         apiKey,
@@ -46,13 +47,13 @@ func NewManager(apiKey string, store *store.Store, updateInterval time.Duration)
 	}
 }
 
-// Start begins the feed update loop
 func (m *Manager) Start() {
 	m.wg.Add(1)
 	go m.updateLoop()
 }
 
-// Stop stops the feed update loop
+// Stop gracefully shuts down the feed update loop
+// Waits for current update to complete before returning
 func (m *Manager) Stop() {
 	close(m.stopCh)
 	m.wg.Wait()
@@ -61,7 +62,7 @@ func (m *Manager) Stop() {
 func (m *Manager) updateLoop() {
 	defer m.wg.Done()
 
-	// Initial update
+	// Fetch initial data before starting periodic updates
 	if err := m.update(); err != nil {
 		log.Printf("Initial update failed: %v", err)
 	}
@@ -69,6 +70,7 @@ func (m *Manager) updateLoop() {
 	ticker := time.NewTicker(m.updateInterval)
 	defer ticker.Stop()
 
+	// Main update loop - select pattern for clean shutdown
 	for {
 		select {
 		case <-ticker.C:
@@ -82,23 +84,26 @@ func (m *Manager) updateLoop() {
 }
 
 func (m *Manager) update() error {
-	// For now, create mock data
-	// TODO: Implement actual GTFS-RT parsing
+	// TODO: Implement actual GTFS-RT parsing from FeedURLs
+	// Currently using mock data for development/testing
 	stations := m.createMockStations()
 	alerts := m.createMockAlerts()
 
-	// Update store
+	// Atomically update store with new data
 	m.store.UpdateStations(stations)
 	m.store.UpdateAlerts(alerts)
 
 	return nil
 }
 
+// fetchFeed retrieves GTFS-RT data from MTA API
+// Currently unused - will be needed when implementing real feed parsing
 func (m *Manager) fetchFeed(url string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
+	// MTA requires API key in x-api-key header
 	req.Header.Set("x-api-key", m.apiKey)
 
 	resp, err := m.httpClient.Do(req)
@@ -115,6 +120,7 @@ func (m *Manager) fetchFeed(url string) ([]byte, error) {
 }
 
 // createMockStations creates mock station data for testing
+// Uses real NYC subway station coordinates and route assignments
 func (m *Manager) createMockStations() map[string]*models.Station {
 	now := time.Now()
 	stations := map[string]*models.Station{
@@ -190,6 +196,7 @@ func (m *Manager) createMockStations() map[string]*models.Station {
 }
 
 // createMockAlerts creates mock alert data for testing
+// Simulates typical MTA service advisories
 func (m *Manager) createMockAlerts() []models.Alert {
 	now := time.Now()
 	future := now.Add(2 * time.Hour)

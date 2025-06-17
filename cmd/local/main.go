@@ -19,7 +19,7 @@ func main() {
 	)
 	flag.Parse()
 
-	// Check for API key in environment if not provided
+	// Fallback to environment variable if API key not provided via flag
 	if *apiKey == "" {
 		*apiKey = os.Getenv("MTA_API_KEY")
 	}
@@ -27,7 +27,6 @@ func main() {
 		log.Fatal("MTA API key required (use -api-key flag or MTA_API_KEY env var)")
 	}
 
-	// Create local client
 	config := mta.DefaultConfig()
 	config.APIKey = *apiKey
 
@@ -37,11 +36,11 @@ func main() {
 	}
 	defer client.Close()
 
-	// Wait for initial data
+	// Allow feed manager time to populate initial data
 	fmt.Println("Waiting for initial data...")
 	time.Sleep(2 * time.Second)
 
-	// Query by route if specified
+	// Route-specific query mode
 	if *route != "" {
 		stations, err := client.GetStationsByRoute(*route)
 		if err != nil {
@@ -55,7 +54,7 @@ func main() {
 		return
 	}
 
-	// Otherwise query by location
+	// Default location-based query mode
 	stations, err := client.GetStationsByLocation(*lat, *lon, 5)
 	if err != nil {
 		log.Fatalf("Failed to get stations: %v", err)

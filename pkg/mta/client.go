@@ -7,23 +7,21 @@ import (
 )
 
 // Client defines the interface for accessing MTA data
+// Abstracts different data sources (local vs remote) behind common interface
 type Client interface {
-	// Station queries
 	GetStationsByLocation(lat, lon float64, limit int) ([]models.Station, error)
 	GetStationsByRoute(route string) ([]models.Station, error)
 	GetStationsByIDs(ids []string) ([]models.Station, error)
 
-	// Route information
 	GetRoutes() ([]string, error)
 
-	// Service alerts
 	GetServiceAlerts() ([]models.Alert, error)
 
-	// Metadata
 	GetLastUpdate() time.Time
 }
 
 // Config holds configuration for the MTA client
+// APIKey required for accessing MTA's GTFS-RT feeds
 type Config struct {
 	APIKey         string
 	UpdateInterval time.Duration
@@ -31,6 +29,7 @@ type Config struct {
 }
 
 // DefaultConfig returns default configuration
+// 60-second update interval balances freshness with API rate limits
 func DefaultConfig() Config {
 	return Config{
 		UpdateInterval: 60 * time.Second,

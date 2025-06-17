@@ -24,7 +24,7 @@ func main() {
 	)
 	flag.Parse()
 
-	// Check for API key in environment if not provided
+	// Fallback to environment variable if API key not provided via flag
 	if *apiKey == "" {
 		*apiKey = os.Getenv("MTA_API_KEY")
 	}
@@ -32,7 +32,6 @@ func main() {
 		log.Fatal("MTA API key required (use -api-key flag or MTA_API_KEY env var)")
 	}
 
-	// Create local client
 	config := mta.Config{
 		APIKey:         *apiKey,
 		UpdateInterval: *updateInterval,
@@ -45,16 +44,14 @@ func main() {
 	}
 	defer client.Close()
 
-	// Wait a moment for initial data
+	// Allow time for feed manager to fetch initial station data
 	log.Println("Waiting for initial data...")
 	time.Sleep(2 * time.Second)
 
-	// Create HTTP server
 	r := mux.NewRouter()
 	h := handlers.NewHandler(client)
 	h.RegisterRoutes(r)
 
-	// Add middleware
 	r.Use(loggingMiddleware)
 	r.Use(corsMiddleware)
 
@@ -66,7 +63,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start server
+	// Start HTTP server in goroutine for graceful shutdown
 	go func() {
 		log.Printf("Server starting on port %s", *port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -74,14 +71,14 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
+	// Block until interrupt signal received
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
 	log.Println("Shutting down server...")
 
-	// Graceful shutdown
+	// Allow 30 seconds for graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -92,6 +89,7 @@ func main() {
 	log.Println("Server stopped")
 }
 
+// loggingMiddleware logs HTTP requests with method, URI, and response time
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -100,12 +98,15 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// corsMiddleware enables CORS for web browser access
+// Allows all origins since this is a public transit API
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
+		// Handle preflight requests
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return

@@ -10,7 +10,7 @@ import (
 func TestStore(t *testing.T) {
 	s := NewStore()
 
-	// Test data
+	// Create test stations representing major NYC transit hubs
 	stations := map[string]*models.Station{
 		"123": {
 			ID:       "123",
@@ -35,11 +35,10 @@ func TestStore(t *testing.T) {
 		},
 	}
 
-	// Update stations
 	s.UpdateStations(stations)
 
 	t.Run("GetStationsByLocation", func(t *testing.T) {
-		// Near Times Square
+		// Query near Times Square coordinates
 		results := s.GetStationsByLocation(40.755, -73.987, 2)
 		if len(results) != 2 {
 			t.Errorf("Expected 2 stations, got %d", len(results))
@@ -58,7 +57,7 @@ func TestStore(t *testing.T) {
 			t.Errorf("Expected 2 stations on route N, got %d", len(results))
 		}
 
-		// Test non-existent route
+		// Verify error handling for invalid routes
 		_, err = s.GetStationsByRoute("X")
 		if err == nil {
 			t.Error("Expected error for non-existent route")
@@ -74,7 +73,7 @@ func TestStore(t *testing.T) {
 			t.Errorf("Expected 2 stations, got %d", len(results))
 		}
 
-		// Test non-existent IDs
+		// Verify error handling for invalid station IDs
 		_, err = s.GetStationsByIDs([]string{"999"})
 		if err == nil {
 			t.Error("Expected error for non-existent IDs")
@@ -118,14 +117,14 @@ func TestStore(t *testing.T) {
 }
 
 func TestDistance(t *testing.T) {
-	// Test distance calculation
-	// Times Square to Grand Central (approximately 0.97 km)
+	// Verify Haversine distance calculation accuracy
+	// Real-world distance: Times Square to Grand Central
 	dist := distance(40.755, -73.987, 40.752, -73.977)
 	if dist < 0.9 || dist > 1.1 {
 		t.Errorf("Expected distance ~1.0 km, got %.2f km", dist)
 	}
 
-	// Same location
+	// Edge case: identical coordinates should return zero distance
 	dist = distance(40.755, -73.987, 40.755, -73.987)
 	if dist != 0 {
 		t.Errorf("Expected distance 0, got %.2f", dist)

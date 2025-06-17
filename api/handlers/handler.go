@@ -14,16 +14,15 @@ import (
 )
 
 // Handler handles HTTP requests
+// Wraps MTA client with REST API endpoints
 type Handler struct {
 	client mta.Client
 }
 
-// NewHandler creates a new HTTP handler
 func NewHandler(client mta.Client) *Handler {
 	return &Handler{client: client}
 }
 
-// RegisterRoutes registers all routes
 func (h *Handler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/", h.handleIndex).Methods("GET")
 	r.HandleFunc("/by-location", h.handleByLocation).Methods("GET")
@@ -34,12 +33,12 @@ func (h *Handler) RegisterRoutes(r *mux.Router) {
 }
 
 // Response wraps API responses
+// Includes optional timestamp for cache validation
 type Response struct {
 	Data    interface{} `json:"data"`
 	Updated string      `json:"updated,omitempty"`
 }
 
-// ErrorResponse represents an error response
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
@@ -53,6 +52,7 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleByLocation(w http.ResponseWriter, r *http.Request) {
+	// Extract and validate coordinate parameters
 	latStr := r.URL.Query().Get("lat")
 	lonStr := r.URL.Query().Get("lon")
 
@@ -73,6 +73,7 @@ func (h *Handler) handleByLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hardcoded limit of 5 stations for reasonable response size
 	stations, err := h.client.GetStationsByLocation(lat, lon, 5)
 	if err != nil {
 		h.writeError(w, err.Error(), http.StatusInternalServerError)
@@ -95,6 +96,7 @@ func (h *Handler) handleByRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleByID(w http.ResponseWriter, r *http.Request) {
+	// Parse comma-separated station IDs from URL path
 	idsStr := mux.Vars(r)["ids"]
 	ids := strings.Split(idsStr, ",")
 
@@ -136,10 +138,11 @@ func (h *Handler) handleAlerts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) writeStationsResponse(w http.ResponseWriter, stations []models.Station) {
-	// Convert stations to response format
+	// Convert internal Station structs to API response format
 	data := make([]models.StationResponse, len(stations))
 	var lastUpdate time.Time
 
+	// Track the most recent update time across all stations
 	for i, station := range stations {
 		data[i] = station.ConvertToResponse()
 		if station.LastUpdate.After(lastUpdate) {

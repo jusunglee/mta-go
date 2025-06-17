@@ -12,6 +12,7 @@ import (
 )
 
 // Store manages in-memory station and alert data
+// Uses read-write mutexes for concurrent access - writes are infrequent but reads are high-volume
 type Store struct {
 	mu              sync.RWMutex
 	stations        map[string]*models.Station
@@ -21,7 +22,6 @@ type Store struct {
 	routes          []string
 }
 
-// NewStore creates a new store instance
 func NewStore() *Store {
 	return &Store{
 		stations:        make(map[string]*models.Station),
@@ -31,6 +31,7 @@ func NewStore() *Store {
 }
 
 // UpdateStations updates the station data
+// Rebuilds secondary indices (routes, sorted stations) for efficient querying
 func (s *Store) UpdateStations(stations map[string]*models.Station) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -38,7 +39,7 @@ func (s *Store) UpdateStations(stations map[string]*models.Station) {
 	s.stations = stations
 	s.lastUpdate = time.Now()
 
-	// Rebuild indices
+	// Rebuild secondary indices for efficient route-based queries
 	s.stationsByRoute = make(map[string][]*models.Station)
 	routeSet := make(map[string]bool)
 
@@ -49,7 +50,7 @@ func (s *Store) UpdateStations(stations map[string]*models.Station) {
 		}
 	}
 
-	// Sort stations by name for each route
+	// Sort stations alphabetically for consistent API responses
 	for route := range s.stationsByRoute {
 		sort.Slice(s.stationsByRoute[route], func(i, j int) bool {
 			return s.stationsByRoute[route][i].Name < s.stationsByRoute[route][j].Name
@@ -64,7 +65,6 @@ func (s *Store) UpdateStations(stations map[string]*models.Station) {
 	sort.Strings(s.routes)
 }
 
-// UpdateAlerts updates the service alerts
 func (s *Store) UpdateAlerts(alerts []models.Alert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -72,15 +72,18 @@ func (s *Store) UpdateAlerts(alerts []models.Alert) {
 }
 
 // GetStationsByLocation returns stations near a location
+// Uses Haversine formula for distance calculation and sorts by proximity
 func (s *Store) GetStationsByLocation(lat, lon float64, limit int) []models.Station {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Temporary struct for sorting stations by proximity
 	type stationDist struct {
 		station  *models.Station
 		distance float64
 	}
 
+	// Calculate distance to all stations for sorting
 	var stations []stationDist
 	for _, station := range s.stations {
 		dist := distance(lat, lon, station.Location.Lat, station.Location.Lon)
@@ -92,6 +95,7 @@ func (s *Store) GetStationsByLocation(lat, lon float64, limit int) []models.Stat
 	})
 
 	result := make([]models.Station, 0, limit)
+	// Return up to 'limit' closest stations, dereferencing pointers
 	for i := 0; i < limit && i < len(stations); i++ {
 		result = append(result, *stations[i].station)
 	}
@@ -100,6 +104,7 @@ func (s *Store) GetStationsByLocation(lat, lon float64, limit int) []models.Stat
 }
 
 // GetStationsByRoute returns all stations on a route
+// Route matching is case-insensitive
 func (s *Store) GetStationsByRoute(route string) ([]models.Station, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -118,11 +123,11 @@ func (s *Store) GetStationsByRoute(route string) ([]models.Station, error) {
 	return result, nil
 }
 
-// GetStationsByIDs returns stations by their IDs
 func (s *Store) GetStationsByIDs(ids []string) ([]models.Station, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	// Collect stations that exist, ignore missing IDs
 	result := make([]models.Station, 0, len(ids))
 	for _, id := range ids {
 		if station, ok := s.stations[id]; ok {
@@ -130,6 +135,7 @@ func (s *Store) GetStationsByIDs(ids []string) ([]models.Station, error) {
 		}
 	}
 
+	// Return error only if no valid stations found
 	if len(result) == 0 {
 		return nil, fmt.Errorf("no stations found for given IDs")
 	}
@@ -137,7 +143,6 @@ func (s *Store) GetStationsByIDs(ids []string) ([]models.Station, error) {
 	return result, nil
 }
 
-// GetRoutes returns all available routes
 func (s *Store) GetRoutes() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -147,7 +152,6 @@ func (s *Store) GetRoutes() []string {
 	return result
 }
 
-// GetServiceAlerts returns all active service alerts
 func (s *Store) GetServiceAlerts() []models.Alert {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -157,7 +161,6 @@ func (s *Store) GetServiceAlerts() []models.Alert {
 	return result
 }
 
-// GetLastUpdate returns the last update time
 func (s *Store) GetLastUpdate() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -165,6 +168,7 @@ func (s *Store) GetLastUpdate() time.Time {
 }
 
 // distance calculates the distance between two points using the Haversine formula
+// Returns distance in kilometers. Assumes Earth radius of 6371km
 func distance(lat1, lon1, lat2, lon2 float64) float64 {
 	const R = 6371 // Earth's radius in kilometers
 

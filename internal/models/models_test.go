@@ -29,7 +29,6 @@ func TestStationConvertToResponse(t *testing.T) {
 
 	response := station.ConvertToResponse()
 
-	// Check basic fields
 	if response.ID != station.ID {
 		t.Errorf("Expected ID %s, got %s", station.ID, response.ID)
 	}
@@ -37,18 +36,15 @@ func TestStationConvertToResponse(t *testing.T) {
 		t.Errorf("Expected Name %s, got %s", station.Name, response.Name)
 	}
 
-	// Check location conversion
 	if response.Location[0] != station.Location.Lat || response.Location[1] != station.Location.Lon {
 		t.Errorf("Location mismatch: expected [%f, %f], got %v",
 			station.Location.Lat, station.Location.Lon, response.Location)
 	}
 
-	// Check routes
 	if len(response.Routes) != len(station.Routes) {
 		t.Errorf("Expected %d routes, got %d", len(station.Routes), len(response.Routes))
 	}
 
-	// Check trains
 	if len(response.N) != len(station.Trains.North) {
 		t.Errorf("Expected %d northbound trains, got %d",
 			len(station.Trains.North), len(response.N))
@@ -58,7 +54,6 @@ func TestStationConvertToResponse(t *testing.T) {
 			len(station.Trains.South), len(response.S))
 	}
 
-	// Check stops conversion
 	if len(response.Stops) != len(station.Stops) {
 		t.Errorf("Expected %d stops, got %d", len(station.Stops), len(response.Stops))
 	}

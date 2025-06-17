@@ -4,25 +4,25 @@ import (
 	"time"
 )
 
-// Location represents a geographic coordinate
 type Location struct {
 	Lat float64 `json:"lat"`
 	Lon float64 `json:"lon"`
 }
 
-// Train represents a train arrival
 type Train struct {
 	Route string    `json:"route"`
 	Time  time.Time `json:"time"`
 }
 
-// TrainsByDirection groups trains by direction
+// TrainsByDirection separates trains by subway direction (North/South)
+// This mirrors the MTA's directional conventions for NYC subway
 type TrainsByDirection struct {
 	North []Train `json:"N"`
 	South []Train `json:"S"`
 }
 
 // Station represents a subway station with real-time data
+// Trains field uses json:"-" to exclude from JSON serialization - use ConvertToResponse for API output
 type Station struct {
 	ID         string              `json:"id"`
 	Name       string              `json:"name"`
@@ -34,6 +34,7 @@ type Station struct {
 }
 
 // StationResponse is the API response format for a station
+// Uses [2]float64 arrays instead of Location structs for more compact JSON output
 type StationResponse struct {
 	ID         string                `json:"id"`
 	Name       string                `json:"name"`
@@ -45,7 +46,6 @@ type StationResponse struct {
 	LastUpdate time.Time             `json:"last_update"`
 }
 
-// Alert represents a service alert
 type Alert struct {
 	ID            string       `json:"id"`
 	Header        string       `json:"header"`
@@ -56,19 +56,21 @@ type Alert struct {
 }
 
 // TimePeriod represents a time range
+// Uses pointers to allow nil values for open-ended periods
 type TimePeriod struct {
 	Start *time.Time `json:"start,omitempty"`
 	End   *time.Time `json:"end,omitempty"`
 }
 
-// FeedInfo contains metadata about the feed
 type FeedInfo struct {
 	LastUpdate time.Time `json:"last_update"`
 	Routes     []string  `json:"routes"`
 }
 
-// ConvertToResponse converts a Station to StationResponse format
+// ConvertToResponse converts internal Station to API response format
+// Transforms Location structs to [lat, lon] arrays and expands nested train directions
 func (s *Station) ConvertToResponse() StationResponse {
+	// Convert Location structs to coordinate arrays for API response
 	stops := make(map[string][2]float64)
 	for id, loc := range s.Stops {
 		stops[id] = [2]float64{loc.Lat, loc.Lon}
