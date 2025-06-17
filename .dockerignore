@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README*
+
+# CI/CD
+.github
+.pre-commit-config.yaml
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+mta-server
+mta-local
+*.exe
+
+# Test data (too large for build context)
+internal/feed/testdata/
+
+# Development
+scripts/
+
+# Docker
+Dockerfile*
+.dockerignore
+
+# Local data
+data/
