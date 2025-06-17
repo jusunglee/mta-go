@@ -126,6 +126,9 @@ mta-go/
     └── handlers/        # HTTP handlers
 ```
 
+### Example API Calls
+Check [API_EXAMPLES.md](api/handlers/API_EXAMPLES.md) for examples of how to call the API.
+
 ### Running Tests
 
 ```bash
