@@ -1,0 +1,70 @@
+# Pre-commit configuration for Go formatting and quality checks
+# Install: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+      - id: end-of-file-fixer
+        name: Ensure files end with newline
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+
+  - repo: local
+    hooks:
+      - id: go-fmt
+        name: Go Format
+        entry: gofmt
+        language: system
+        args: [-w, -s]
+        files: \.go$
+        description: Formats Go code using gofmt
+
+      - id: go-imports
+        name: Go Imports
+        entry: goimports
+        language: system
+        args: [-w]
+        files: \.go$
+        description: Organizes Go imports
+        # Install with: go install golang.org/x/tools/cmd/goimports@latest
+
+      - id: go-mod-tidy
+        name: Go Mod Tidy
+        entry: go
+        language: system
+        args: [mod, tidy]
+        files: go\.(mod|sum)$
+        pass_filenames: false
+        description: Ensures go.mod and go.sum are up to date
+
+      - id: go-vet
+        name: Go Vet
+        entry: go
+        language: system
+        args: [vet, ./...]
+        files: \.go$
+        pass_filenames: false
+        description: Reports suspicious constructs in Go code
+
+      - id: go-build
+        name: Go Build
+        entry: bash
+        language: system
+        args: [-c, 'go build ./cmd/server && go build ./cmd/local']
+        files: \.go$
+        pass_filenames: false
+        description: Ensures the code builds successfully
+
+      - id: go-test-fast
+        name: Go Test (Fast)
+        entry: go
+        language: system
+        args: [test, -short, ./...]
+        files: \.go$
+        pass_filenames: false
+        description: Runs fast Go tests (skips slow integration tests)

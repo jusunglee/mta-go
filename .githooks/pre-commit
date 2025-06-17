@@ -1,0 +1,158 @@
+#!/bin/bash
+# Git pre-commit hook for Go formatting and basic checks
+# This is a standalone hook that doesn't require external tools
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# Check if this is an initial commit
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    against=HEAD
+else
+    # Initial commit: diff against an empty tree object
+    against=$(git hash-object -t tree /dev/null)
+fi
+
+# Get list of staged Go files
+staged_go_files=$(git diff --cached --name-only --diff-filter=ACM $against | grep '\.go$' || true)
+
+if [ -z "$staged_go_files" ]; then
+    echo "✅ No Go files staged for commit"
+    exit 0
+fi
+
+echo "📁 Staged Go files:"
+echo "$staged_go_files" | sed 's/^/  - /'
+
+# Check if required tools are available
+check_tool() {
+    if ! command -v "$1" &> /dev/null; then
+        echo "❌ Error: $1 is not installed or not in PATH"
+        echo "   Please install it and try again"
+        exit 1
+    fi
+}
+
+check_tool "go"
+check_tool "gofmt"
+
+# Check gofmt
+echo ""
+echo "🎨 Checking Go formatting..."
+unformatted_files=$(echo "$staged_go_files" | xargs gofmt -l)
+
+if [ -n "$unformatted_files" ]; then
+    echo "❌ The following files are not formatted correctly:"
+    echo "$unformatted_files" | sed 's/^/  - /'
+    echo ""
+    echo "🔧 Auto-formatting files..."
+    echo "$unformatted_files" | xargs gofmt -w -s
+    
+    # Stage the formatted files
+    echo "$unformatted_files" | xargs git add
+    echo "✅ Files have been formatted and re-staged"
+else
+    echo "✅ All Go files are properly formatted"
+fi
+
+# Check goimports (if available)
+if command -v goimports &> /dev/null; then
+    echo ""
+    echo "📦 Checking Go imports..."
+    
+    # Create temporary files to check imports
+    temp_dir=$(mktemp -d)
+    imports_changed=false
+    
+    for file in $staged_go_files; do
+        if [ -f "$file" ]; then
+            temp_file="$temp_dir/$(basename "$file")"
+            cp "$file" "$temp_file"
+            goimports -w "$file"
+            
+            if ! cmp -s "$file" "$temp_file"; then
+                imports_changed=true
+                echo "  📝 Fixed imports in: $file"
+            fi
+        fi
+    done
+    
+    rm -rf "$temp_dir"
+    
+    if [ "$imports_changed" = true ]; then
+        echo "$staged_go_files" | xargs git add
+        echo "✅ Import statements have been organized and re-staged"
+    else
+        echo "✅ All import statements are properly organized"
+    fi
+else
+    echo ""
+    echo "⚠️  goimports not found - skipping import organization"
+    echo "   Install with: go install golang.org/x/tools/cmd/goimports@latest"
+fi
+
+# Check go mod tidy (if go.mod changed)
+if echo "$staged_go_files" | grep -q "go\.mod\|go\.sum" || git diff --cached --name-only $against | grep -q "go\.mod\|go\.sum"; then
+    echo ""
+    echo "📋 Checking go.mod..."
+    
+    # Save current go.mod and go.sum
+    if [ -f "go.mod" ]; then
+        cp go.mod go.mod.bak
+    fi
+    if [ -f "go.sum" ]; then
+        cp go.sum go.sum.bak
+    fi
+    
+    go mod tidy
+    
+    # Check if files changed
+    mod_changed=false
+    if [ -f "go.mod.bak" ] && ! cmp -s go.mod go.mod.bak; then
+        mod_changed=true
+        echo "  📝 Updated go.mod"
+    fi
+    if [ -f "go.sum.bak" ] && ! cmp -s go.sum go.sum.bak; then
+        mod_changed=true
+        echo "  📝 Updated go.sum"
+    fi
+    
+    # Clean up backup files
+    rm -f go.mod.bak go.sum.bak
+    
+    if [ "$mod_changed" = true ]; then
+        git add go.mod go.sum
+        echo "✅ go.mod and go.sum have been updated and staged"
+    else
+        echo "✅ go.mod and go.sum are up to date"
+    fi
+fi
+
+# Run go vet on staged files
+echo ""
+echo "🔍 Running go vet..."
+if go vet ./...; then
+    echo "✅ go vet passed"
+else
+    echo "❌ go vet found issues"
+    echo "   Please fix the issues above and commit again"
+    exit 1
+fi
+
+# Quick build check
+echo ""
+echo "🏗️  Checking build..."
+if go build ./cmd/server >/dev/null 2>&1 && go build ./cmd/local >/dev/null 2>&1; then
+    echo "✅ Build successful"
+    # Clean up build artifacts
+    rm -f mta-server mta-local mta-server.exe mta-local.exe
+else
+    echo "❌ Build failed"
+    echo "   Please fix build errors and commit again"
+    exit 1
+fi
+
+echo ""
+echo "🎉 All pre-commit checks passed!"
+echo "📝 Committing changes..."
