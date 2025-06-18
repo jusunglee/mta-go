@@ -50,6 +50,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
       
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -88,6 +90,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
       
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -135,6 +139,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
       
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -154,6 +160,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
       
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -178,6 +186,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
       
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -220,6 +230,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        lfs: true
       
     - name: Check for deployment files
       run: |
