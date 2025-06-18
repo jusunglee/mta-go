@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
-
 	"time"
 
 	"github.com/gorilla/mux"
@@ -216,5 +216,8 @@ func (h *Handler) writeJSON(w http.ResponseWriter, data interface{}) {
 func (h *Handler) writeError(w http.ResponseWriter, message string, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(ErrorResponse{Error: message})
+	if err := json.NewEncoder(w).Encode(ErrorResponse{Error: message}); err != nil {
+		// Log the error but don't attempt to write again since we already wrote the status
+		log.Printf("Error encoding error response: %v", err)
+	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/jusunglee/mta-go/internal/gtfsrt"
 	"github.com/jusunglee/mta-go/internal/models"
 	"github.com/jusunglee/mta-go/internal/store"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -208,16 +209,22 @@ func (m *Manager) processFeed(feedURL string, stations map[string]*models.Statio
 	}
 
 	// Process each entity in the feed
+	var eg errgroup.Group
 	for _, entity := range feedMessage.Entity {
-		if entity.TripUpdate != nil {
-			m.processTripUpdate(entity.TripUpdate, stations)
-		}
-		if entity.Alert != nil {
-			m.processAlert(entity.Alert)
-		}
+		eg.Go(func() error {
+			if entity.TripUpdate != nil {
+				err := m.processTripUpdate(entity.TripUpdate, stations)
+				if err != nil {
+					return fmt.Errorf("failed to process trip update for entity %v: %w", entity.Id, err)
+				}
+			}
+			if entity.Alert != nil {
+				return m.processAlert(entity.Alert)
+			}
+			return nil
+		})
 	}
-
-	return nil
+	return eg.Wait()
 }
 
 // processTripUpdate processes a GTFS-RT trip update to extract arrival times
@@ -301,15 +308,15 @@ func (m *Manager) processTripUpdate(tripUpdate *gtfsrt.TripUpdate, stations map[
 }
 
 // processAlert processes a GTFS-RT alert and adds it to the store
-func (m *Manager) processAlert(alert *gtfsrt.Alert) {
+func (m *Manager) processAlert(alert *gtfsrt.Alert) error {
 	if alert.HeaderText == nil || len(alert.HeaderText.Translation) == 0 {
-		return
+		return fmt.Errorf("alert is missing header text")
 	}
 
 	// Extract alert text
 	headerText := alert.HeaderText.Translation[0].Text
 	if headerText == nil {
-		return
+		return fmt.Errorf("alert is missing header text")
 	}
 
 	descriptionText := ""
@@ -366,6 +373,8 @@ func (m *Manager) processAlert(alert *gtfsrt.Alert) {
 	currentAlerts := m.store.GetServiceAlerts()
 	currentAlerts = append(currentAlerts, alertModel)
 	m.store.UpdateAlerts(currentAlerts)
+
+	return nil
 }
 
 // extractRouteFromID extracts route name from GTFS route ID
@@ -466,7 +475,7 @@ func (m *Manager) loadStaticGTFSData() error {
 func (m *Manager) downloadFile(url, filepath string) error {
 	resp, err := m.httpClient.Get(url)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create directory %s: %w", m.gtfsDataDir, err)
 	}
 	defer resp.Body.Close()
 
@@ -476,51 +485,57 @@ func (m *Manager) downloadFile(url, filepath string) error {
 
 	out, err := os.Create(filepath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create file %s: %w", filepath, err)
 	}
 	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to copy file %s: %w", filepath, err)
+	}
+
+	return nil
 }
 
 // extractZip extracts a ZIP file to the specified directory
 func (m *Manager) extractZip(src, dest string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open zip file %s: %w", src, err)
 	}
 	defer r.Close()
 
 	// Create destination directory
 	if err := os.MkdirAll(dest, 0755); err != nil {
-		return err
+		return fmt.Errorf("failed to create directory %s: %w", dest, err)
 	}
 
 	// Extract files
 	for _, f := range r.File {
 		path := filepath.Join(dest, f.Name)
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(path, f.FileInfo().Mode())
+			if err := os.MkdirAll(path, f.FileInfo().Mode()); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", path, err)
+			}
 			continue
 		}
 
 		rc, err := f.Open()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to open file %s: %w", path, err)
 		}
 
 		outFile, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.FileInfo().Mode())
 		if err != nil {
 			rc.Close()
-			return err
+			return fmt.Errorf("failed to create file %s: %w", path, err)
 		}
 
 		_, err = io.Copy(outFile, rc)
 		outFile.Close()
 		rc.Close()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to copy file %s: %w", path, err)
 		}
 	}
 
